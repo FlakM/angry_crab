@@ -42,7 +42,7 @@ pub struct LocalSettings<'a> {
     pub endpoint: SocketAddr,
 }
 
-fn get_peer_to_set(peer: &wireguard_uapi::get::Peer) -> wireguard_uapi::set::Peer {
+fn into_set_peer(peer: &wireguard_uapi::get::Peer) -> wireguard_uapi::set::Peer {
     let mut set = wireguard_uapi::set::Peer {
         public_key: &peer.public_key,
         allowed_ips: vec![],
@@ -64,7 +64,7 @@ fn get_peer_to_set(peer: &wireguard_uapi::get::Peer) -> wireguard_uapi::set::Pee
 pub fn apply_update<'a>(
     device: &'a Device,
     update: &'a WgInstanceUpdateSettings,
-    local_settings: LocalSettings<'a>,
+    local_settings: &'a LocalSettings<'a>,
 ) -> Result<wireguard_uapi::set::Device<'a>> {
     let current_peers = &device.peers;
     let mut new_peers: Vec<wireguard_uapi::set::Peer> = vec![];
@@ -76,7 +76,7 @@ pub fn apply_update<'a>(
                     .find(|p| p.public_key == peer.public_key)
                 {
                     Some(already_present_peer) => {
-                        let mut updated = get_peer_to_set(already_present_peer);
+                        let mut updated = into_set_peer(already_present_peer);
                         updated.allowed_ips = peer
                             .allowed_ips
                             .iter()
@@ -111,7 +111,7 @@ pub fn apply_update<'a>(
             PeerUpdate::Remove(Identity { public_key }) => {
                 match current_peers.iter().find(|p| &p.public_key == public_key) {
                     Some(peer) => {
-                        let mut set_peer = get_peer_to_set(peer);
+                        let mut set_peer = into_set_peer(peer);
                         set_peer.flags = vec![WgPeerF::RemoveMe];
                         new_peers.push(set_peer);
                     }
@@ -136,7 +136,7 @@ pub fn apply_update<'a>(
     for peer in device.peers.iter() {
         let defined = new_peers.iter().find(|n| n.public_key == &peer.public_key);
         if defined.is_some() {
-            let mut to_be_removed = get_peer_to_set(peer);
+            let mut to_be_removed = into_set_peer(peer);
             to_be_removed.flags = vec![wireguard_uapi::set::WgPeerF::RemoveMe];
             final_device.peers.push(to_be_removed);
         }

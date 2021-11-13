@@ -4,7 +4,7 @@ use colored::Colorize;
 use domain::WgInstanceUpdateSettings;
 use wireguard_uapi::get::{AllowedIp, Device, Peer};
 use wireguard_uapi::{DeviceInterface, RouteSocket, WgSocket};
-
+mod keys;
 use crate::domain::LocalSettings;
 fn main() -> Result<()> {
     let mut wg = WgSocket::connect()?;
@@ -22,7 +22,7 @@ fn main() -> Result<()> {
     std::thread::sleep_ms(1000 * 3);
     println!("updating interface");
 
-    let updated = domain::apply_update(&device, &update, local_settings)?;
+    let updated = domain::apply_update(&device, &update, &local_settings)?;
 
     wg.set_device(updated)?;
     println!("wg should be empty");
