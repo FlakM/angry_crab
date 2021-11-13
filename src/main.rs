@@ -3,7 +3,7 @@ pub mod domain;
 use colored::Colorize;
 use domain::WgInstanceUpdateSettings;
 use wireguard_uapi::get::{AllowedIp, Device, Peer};
-use wireguard_uapi::{DeviceInterface, RouteSocket, WgSocket};
+use wireguard_uapi::{DeviceInterface, WgSocket};
 mod keys;
 use crate::domain::LocalSettings;
 fn main() -> Result<()> {
