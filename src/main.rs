@@ -4,6 +4,7 @@ use colored::Colorize;
 use domain::WgInstanceUpdateSettings;
 use wireguard_uapi::get::{AllowedIp, Device, Peer};
 use wireguard_uapi::{DeviceInterface, WgSocket};
+mod controller;
 mod keys;
 use crate::domain::LocalSettings;
 fn main() -> Result<()> {
@@ -12,10 +13,14 @@ fn main() -> Result<()> {
     print_device(&device);
 
     let local_settings = LocalSettings {
+        interface_name: Some("wg0"),
         endpoint: "127.0.0.1:9999".parse()?,
         private_key: &[1; 32],
         preshared_key: None,
     };
+
+
+    let controller = controller::new
 
     let update = WgInstanceUpdateSettings { peers: vec![] };
 
