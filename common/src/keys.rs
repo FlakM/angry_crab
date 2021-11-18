@@ -1,8 +1,17 @@
+use anyhow::anyhow;
+use anyhow::Result;
 use rand_core::OsRng;
 
-fn generate_private_key() -> [u8; 32] {
+pub fn generate_private_key() -> [u8; 32] {
     let secret = x25519_dalek::StaticSecret::new(OsRng);
     secret.to_bytes()
+}
+
+pub fn public_key_for_secret(secret: [u8; 32]) -> Result<[u8; 32]> {
+    x25519_dalek::PublicKey::from(secret)
+        .to_bytes()
+        .try_into()
+        .map_err(|_| anyhow!("shit"))
 }
 
 #[cfg(test)]
