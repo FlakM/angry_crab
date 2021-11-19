@@ -65,7 +65,7 @@ impl<'a> WgController<'a> {
         let device = self
             .socket
             .get_device(DeviceInterface::Name(ifname.into()))?;
-        let update_definition = apply_update(
+        let update_definition = prepare_new_device_definition(
             &device,
             &update,
             self.local_settings,
@@ -110,6 +110,7 @@ impl<'a> WgController<'a> {
     }
 }
 
+// I cannot use From here as IpWithCidr is defined in other file
 fn to_ip_with_cidr(ip: wireguard_uapi::get::AllowedIp) -> IpWithCidr {
     IpWithCidr {
         ip: ip.ipaddr,
@@ -162,7 +163,8 @@ fn into_set_peer(peer: &wireguard_uapi::get::Peer) -> wireguard_uapi::set::Peer 
     }
 }
 
-pub fn apply_update<'a>(
+/// Takes current device status read from WgSocket and returns update definition
+pub fn prepare_new_device_definition<'a>(
     device: &'a Device,
     update: &'a WgInstanceUpdateSettings,
     local_settings: &'a LocalSettings<'a>,
@@ -256,6 +258,8 @@ pub fn apply_update<'a>(
 #[cfg(test)]
 mod tests {
 
+    use std::time::Duration;
+
     use super::*;
     #[test]
     #[ignore]
@@ -321,7 +325,7 @@ mod tests {
         let device = device();
         let update = WgInstanceUpdateSettings { peers: vec![] };
         let settings = local_settings();
-        let updates = apply_update(&device, &update, &settings, true).unwrap();
+        let updates = prepare_new_device_definition(&device, &update, &settings, true).unwrap();
 
         assert_eq!(updates.peers.len(), 0)
     }
@@ -339,7 +343,7 @@ mod tests {
         };
 
         let settings = local_settings();
-        let updates = apply_update(&device, &update, &settings, true).unwrap();
+        let updates = prepare_new_device_definition(&device, &update, &settings, true).unwrap();
 
         assert_eq!(updates.peers.len(), 1);
         assert_eq!(updates.peers[0].public_key, &single_peer.id.public_key);
@@ -354,12 +358,77 @@ mod tests {
     }
 
     #[test]
-    pub fn remove_by_id() {
-        unimplemented!()
-    }
+    pub fn prepare_updates() {
+        let mut device = device();
+        let public_key: [u8; 32] = [1; 32];
+        let wg_peer = wireguard_uapi::get::Peer {
+            public_key: public_key.clone(),
+            allowed_ips: vec![],
+            endpoint: None,
+            preshared_key: [0; 32],
+            rx_bytes: 1,
+            tx_bytes: 2,
+            protocol_version: 0,
+            last_handshake_time: Duration::from_secs(1),
+            persistent_keepalive_interval: 0,
+        };
+        let mut wg_peer_2 = wg_peer.clone();
+        wg_peer_2.public_key = [2; 32];
+        device.peers.push(wg_peer);
+        device.peers.push(wg_peer_2);
+        let update = WgInstanceUpdateSettings {
+            peers: vec![PeerUpdate::Remove(Identity {
+                public_key: public_key,
+            })],
+        };
 
-    #[test]
-    pub fn change_single_ip_for_node_and_remove_not_mentioned() {
-        unimplemented!()
+        let settings = local_settings();
+        let updates_without_removing =
+            prepare_new_device_definition(&device, &update, &settings, false).unwrap();
+
+        assert_eq!(updates_without_removing.peers.len(), 1);
+        assert_eq!(
+            updates_without_removing.peers[0].flags[0],
+            WgPeerF::RemoveMe
+        );
+
+        let updates_remove_not_mentioned =
+            prepare_new_device_definition(&device, &update, &settings, true).unwrap();
+        assert_eq!(updates_remove_not_mentioned.peers.len(), 2);
+        assert_eq!(
+            updates_remove_not_mentioned
+                .peers
+                .iter()
+                .filter(|p| p.flags.contains(&WgPeerF::RemoveMe))
+                .count(),
+            2
+        );
+
+        let change_allowed = WgInstanceUpdateSettings {
+            peers: vec![PeerUpdate::Update(Peer {
+                id: Identity {
+                    public_key: public_key,
+                },
+                endpoint: None,
+                allowed_ips: vec![IpWithCidr {
+                    ip: "127.0.0.1".parse().unwrap(),
+                    cidr_mask: Some(24),
+                }],
+                keep_alive: None,
+            })],
+        };
+        let single_changes =
+            prepare_new_device_definition(&device, &change_allowed, &settings, false).unwrap();
+
+        // single peer is marked as to be changed and has no flag to remove set
+        assert_eq!(single_changes.peers.len(), 1);
+        assert_eq!(
+            single_changes
+                .peers
+                .iter()
+                .filter(|p| p.flags.len() == 0)
+                .count(),
+            0
+        );
     }
 }
